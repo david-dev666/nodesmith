@@ -22,19 +22,19 @@ Agent Runtime ── ReAct 循环，最多 8 步，超 24 条消息自动压缩
 落入真图并重排
 ```
 
-在 React Native（Expo）里没有 Node、也没有服务端，要长期维护一张图，没有套通用 Agent 框架，自己实现了四个核心部分：
+React Native 里没有 Node，也没有服务端，通用的 Agent 框架用不起来，下面几块是手写的：
 
-### 沙盒执行，确认落盘
+### 改动只在副本上
 
-模型的写操作都在内存副本（`ctx.draft`）上，支持多步试错和回滚，真图全程不动。跑完产出结构变更提案，必须用户点击确认，才提交并触发重排。
+模型的写操作只动内存副本（`ctx.draft`），可以反复试、回滚，真图不受影响。跑完给出一份改动，你点了确认才提交、重排。
 
-### 只读工具，按需查图
+### 图不存进上下文
 
-上下文只存对话目标和操作简报，不存全量图快照。模型需要时主动调 `read_diagram` 查当前图，避免多轮迭代后 context 膨胀。
+上下文里只有对话目标和操作简报，没有整张图。模型要看图时自己调 `read_diagram`，免得几轮下来 context 撑爆。
 
-### 会话自动压缩
+### 会话长了自动压
 
-超过 24 条历史就把旧消息压成意图摘要。截断点锁在 `user` 消息边界，保证 `assistant → tool` 调用链完整，否则 API 会拒绝这串历史。
+超过 24 条消息，旧的就压成一段摘要。截断点落在 `user` 消息上，从中间切会拆散 `assistant → tool` 调用链，API 会拒绝这串历史。
 
 ## 为什么不用 LangGraph
 
@@ -45,7 +45,7 @@ LangGraph.js 依赖的底层包在 React Native 里有原生兼容问题，Check
 | 状态机 | `StateGraph` | `agent/runtime.ts`（纯 TS 循环） |
 | 工具层 | `@tool` | 9 个原子工具函数 |
 | 状态持久化 | `Checkpointer` | 每张图一个 `AgentSession`，落 `AsyncStorage` |
-| 记忆修剪 | `MemorySaver` | 规则驱动的边界截断与摘要注入 |
+| 记忆修剪 | `MemorySaver` | 按规则截断并写摘要 |
 
 以后要迁到服务端，只需替换 `runtime.ts` 的调用入口，工具定义可以直接搬到 Python 侧当 `@tool`。
 
@@ -53,7 +53,7 @@ LangGraph.js 依赖的底层包在 React Native 里有原生兼容问题，Check
 
 - **自动分层布局**：不做拖动节点，位置由布局算法算（叶子按序占位、父节点落在子节点正中、连线走直角），改完自动重排
 - **手势不触发重渲染**：单指平移走 `PanResponder` + `Animated`，双指捏合连续缩放，按钮走档位
-- **纯端侧运行**：纯 Expo Managed Workflow，没有自定义原生代码，API Key 只存本地
+- **纯端侧**：Expo Managed Workflow，没有自定义原生代码，API Key 只存本地
 
 ## 快速开始
 
